@@ -1,0 +1,14 @@
+{
+  "name": "consumer-service",
+  "version": "1.0.0",
+  "description": "Notification consumer service",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "kafkajs": "^2.2.4",
+    "pg": "^8.11.3",
+    "nodemailer": "^6.9.7"
+  }
+}

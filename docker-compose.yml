@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: notification_db
+    environment:
+      POSTGRES_USER: notifuser
+      POSTGRES_PASSWORD: notifpass
+      POSTGRES_DB: notificationdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - notification_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notifuser"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Zookeeper (required for Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - notification_network
+
+  # Apache Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - notification_network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Producer Service
+  producer:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+    container_name: producer_service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://notifuser:notifpass@postgres:5432/notificationdb
+      KAFKA_BROKER: kafka:29092
+      NODE_ENV: development
+    ports:
+      - "3001:3001"
+    networks:
+      - notification_network
+    restart: unless-stopped
+
+  # Consumer Service
+  consumer:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+    container_name: consumer_service
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://notifuser:notifpass@postgres:5432/notificationdb
+      KAFKA_BROKER: kafka:29092
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-your-email@gmail.com}
+      SMTP_PASS: ${SMTP_PASS:-your-password}
+      NODE_ENV: development
+    networks:
+      - notification_network
+    restart: unless-stopped
+
+  # Frontend Template Editor
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: template_editor
+    depends_on:
+      - postgres
+    environment:
+      API_URL: http://producer:3001
+    ports:
+      - "3000:80"
+    networks:
+      - notification_network
+
+volumes:
+  postgres_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_logs:
+
+networks:
+  notification_network:
+    driver: bridge
