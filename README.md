@@ -2,6 +2,10 @@
 
 A scalable, event-driven email notification system built with Node.js, Kafka, PostgreSQL, Redis, and MongoDB. This system provides a complete solution for managing email templates, queuing notifications, and monitoring system logs in real-time.
 
+## 🌟 Why This System Matters
+
+In today's digital landscape, timely and reliable email communication is critical for business success. This notification system serves as a robust backbone for automated email delivery across diverse use cases. Whether you're running an **e-commerce platform** that needs to send order confirmations, shipping updates, and abandoned cart reminders; a **SaaS application** requiring user onboarding emails, password resets, and feature announcements; a **financial institution** delivering transaction alerts, account statements, and security notifications; or a **healthcare system** managing appointment reminders, test results, and prescription notifications - this system handles it all with enterprise-grade reliability. The event-driven architecture ensures that even during peak loads or system failures, no notification is lost, while the dead letter queue guarantees failed messages can be investigated and retried. With built-in rate limiting, you can prevent spam and comply with email provider restrictions, while the template management system allows marketing teams to update email designs without developer intervention. Real-time monitoring gives you complete visibility into your email delivery pipeline, helping you track success rates, identify bottlenecks, and debug issues instantly. From sending millions of marketing newsletters to critical transactional alerts, from multi-tenant SaaS platforms to internal enterprise systems, this notification service adapts to your scale and reliability requirements. The system's decoupled design means your main application never blocks waiting for emails to send - notifications are queued instantly and processed asynchronously, ensuring optimal application performance and user experience.
+
 ## 🏗️ System Architecture
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -119,38 +123,14 @@ A scalable, event-driven email notification system built with Node.js, Kafka, Po
 ## 📋 Prerequisites
 
 - Docker & Docker Compose
-- SMTP credentials (Gmail, SendGrid, etc.)
-- Node.js 18+ (for local development)
+
 
 ## 🚀 Quick Start
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/ekelejames/email-notification-system.git
 cd email-notification-system
-```
-
-### 2. Configure Environment Variables
-
-Create a `.env` file in the root directory:
-```env
-# SMTP Configuration (Required)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-
-# Database Configuration (Optional - uses defaults)
-POSTGRES_USER=admin
-POSTGRES_PASSWORD=admin
-POSTGRES_DB=notificationdb
-
-# Redis Configuration (Optional)
-REDIS_URL=redis://redis:6379
-
-# MongoDB Configuration (Optional)
-MONGO_URL=mongodb://root:root@mongo:27017
-MONGO_AUTH_SOURCE=admin
 ```
 
 ### 3. Start the System
@@ -191,6 +171,65 @@ Once your system is running, open these URLs directly in your browser:
 | 🗄️ **Database Admin** | **http://localhost:8084** | MongoDB admin interface (login: admin/admin_pass) |
 
 ---
+
+## 🧪 Complete Testing Workflow
+
+### Step 1: Start the System
+```bash
+docker-compose up -d
+```
+
+### Step 2: Wait for Services (30-60 seconds)
+```bash
+# Check if all services are running
+docker-compose ps
+
+# All services should show "Up" status
+```
+
+### Step 3: View Pre-loaded Templates (Browser)
+Open in browser: **http://localhost:3000**
+
+You should see 2 pre-loaded templates:
+- welcome_email
+- order_confirmation
+
+### Step 4: Send test nofication via the UI or do using API
+
+### Through API: Send a Test Email (Replace with YOUR email)
+```bash
+curl -X POST http://localhost:3001/api/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_name": "Test User",
+    "user_email": "YOUR_EMAIL@gmail.com",
+    "template_id": 1,
+    "data": {
+      "registration_date": "2025-10-25",
+      "dashboard_url": "https://example.com/dashboard"
+    }
+  }'
+```
+
+### Step 6: Monitor Progress (Browser)
+Open in browser: **http://localhost:8442**
+
+You should see logs like:
+- ✓ Processing notification for request ID: 1
+- ✓ Template loaded: welcome_email
+- ✓ Email sent successfully
+
+### Step 7: Check Request Status
+```bash
+curl http://localhost:3001/api/requests
+```
+
+Look for `"status": "sent"` in the response.
+
+### Step 8: Check Your Email Inbox! 📬
+
+---
+
 
 ## 🎯 Complete API Endpoints Reference
 
@@ -498,435 +537,6 @@ curl http://localhost:8442/api/logs/stats
 curl -X DELETE http://localhost:8442/api/logs
 ```
 
----
-
-### 🏥 Health Checks
-
-#### 19. Producer Service Health
-```bash
-curl http://localhost:3001/health
-```
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "kafkaReady": true,
-  "redisConnected": true,
-  "timestamp": "2025-10-25T10:00:00Z"
-}
-```
-
-#### 20. Log Service Health
-```bash
-curl http://localhost:8442/health
-```
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "logsCount": 1000,
-  "mongoConnected": true,
-  "timestamp": "2025-10-25T10:00:00Z"
-}
-```
-
----
-
-## 🧪 Complete Testing Workflow
-
-### Step 1: Start the System
-```bash
-docker-compose up -d
-```
-
-### Step 2: Wait for Services (30-60 seconds)
-```bash
-# Check if all services are running
-docker-compose ps
-
-# All services should show "Up" status
-```
-
-### Step 3: View Pre-loaded Templates (Browser)
-Open in browser: **http://localhost:3000**
-
-You should see 2 pre-loaded templates:
-- welcome_email
-- order_confirmation
-
-### Step 4: Or Get Templates via API
-```bash
-curl http://localhost:3001/api/templates
-```
-
-### Step 5: Send a Test Email (Replace with YOUR email)
-```bash
-curl -X POST http://localhost:3001/api/notifications \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_name": "Test User",
-    "user_email": "YOUR_EMAIL@gmail.com",
-    "template_id": 1,
-    "data": {
-      "registration_date": "2025-10-25",
-      "dashboard_url": "https://example.com/dashboard"
-    }
-  }'
-```
-
-### Step 6: Monitor Progress (Browser)
-Open in browser: **http://localhost:8442**
-
-You should see logs like:
-- ✓ Processing notification for request ID: 1
-- ✓ Template loaded: welcome_email
-- ✓ Email sent successfully
-
-### Step 7: Check Request Status
-```bash
-curl http://localhost:3001/api/requests
-```
-
-Look for `"status": "sent"` in the response.
-
-### Step 8: Check Your Email Inbox! 📬
-
----
-
-## 🎨 Using Postman Instead of cURL
-
-### Import These Requests:
-
-**Base URL:** `http://localhost:3001`
-
-#### Collection: Email Notification System
-
-1. **GET** - Get All Templates
-   - URL: `http://localhost:3001/api/templates`
-   - Method: GET
-
-2. **GET** - Get Single Template
-   - URL: `http://localhost:3001/api/templates/1`
-   - Method: GET
-
-3. **POST** - Create Template
-   - URL: `http://localhost:3001/api/templates`
-   - Method: POST
-   - Headers: `Content-Type: application/json`
-   - Body (raw JSON):
-```json
-   {
-     "name": "test_email",
-     "description": "Test template",
-     "subject": "Hello {{user_name}}",
-     "html_content": "<html><body><h1>Hello {{user_name}}</h1></body></html>",
-     "variables": ["user_name", "user_email"]
-   }
-```
-
-4. **POST** - Send Notification
-   - URL: `http://localhost:3001/api/notifications`
-   - Method: POST
-   - Headers: `Content-Type: application/json`
-   - Body (raw JSON):
-```json
-   {
-     "user_name": "John Doe",
-     "user_email": "your-email@gmail.com",
-     "template_id": 1,
-     "data": {
-       "registration_date": "2025-10-25",
-       "dashboard_url": "https://example.com"
-     }
-   }
-```
-
-5. **GET** - Get All Requests
-   - URL: `http://localhost:3001/api/requests`
-   - Method: GET
-
-6. **GET** - Get DLQ Messages
-   - URL: `http://localhost:3001/api/dlq`
-   - Method: GET
-
-7. **POST** - Retry All DLQ
-   - URL: `http://localhost:3001/api/dlq/retry-all`
-   - Method: POST
-
-8. **GET** - Get Logs
-   - URL: `http://localhost:8442/api/logs`
-   - Method: GET
-
----
-
-## 📊 Database Schema
-
-### PostgreSQL Tables
-
-#### templates
-```sql
-CREATE TABLE templates (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  description TEXT,
-  subject VARCHAR(500) NOT NULL,
-  html_content TEXT NOT NULL,
-  variables JSONB DEFAULT '[]',
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-#### requests
-```sql
-CREATE TABLE requests (
-  id SERIAL PRIMARY KEY,
-  user_name VARCHAR(255) NOT NULL,
-  user_email VARCHAR(255) NOT NULL,
-  template_id INTEGER REFERENCES templates(id),
-  data JSONB DEFAULT '{}',
-  status VARCHAR(50) DEFAULT 'pending',
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  processed_at TIMESTAMPTZ
-);
-```
-
-#### dead_letter_queue
-```sql
-CREATE TABLE dead_letter_queue (
-  id SERIAL PRIMARY KEY,
-  request_id INTEGER NOT NULL,
-  user_name VARCHAR(255),
-  user_email VARCHAR(255),
-  template_id INTEGER,
-  data JSONB,
-  error_message TEXT,
-  retry_count INTEGER DEFAULT 0,
-  retry_attempted BOOLEAN DEFAULT false,
-  failed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### MongoDB Collections
-
-#### notification_logs.logs
-- Service logs from producer and consumer
-- Real-time log streaming data
-
-#### system_logs.system_events
-- System-level events and metrics
-
----
-
-## 🔧 Configuration & Scaling
-
-### Scaling Consumer Services
-
-Edit `docker-compose.yml`:
-```yaml
-consumer:
-  # ... other config
-  deploy:
-    replicas: 5  # Increase number of consumers for better throughput
-```
-
-Then restart:
-```bash
-docker-compose up -d --scale consumer=5
-```
-
-### Adjusting Redis Memory
-```yaml
-redis:
-  command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
-```
-
-### Kafka Partitions
-
-For better parallelism, increase partitions in `producer/index.js`:
-```javascript
-const requiredTopics = [
-  { topic: 'notification-requests', numPartitions: 10, replicationFactor: 1 }
-];
-```
-
----
-
-## 🐛 Troubleshooting
-
-### Services Won't Start
-```bash
-# Check service logs
-docker-compose logs <service-name>
-
-# Example: Check producer logs
-docker-compose logs producer
-
-# Restart specific service
-docker-compose restart <service-name>
-
-# Rebuild and restart
-docker-compose up -d --build <service-name>
-```
-
-### Emails Not Sending
-
-1. **Check SMTP credentials in `.env` file**
-```bash
-   cat .env | grep SMTP
-```
-
-2. **Check consumer logs**
-```bash
-   docker-compose logs consumer
-```
-
-3. **Verify Kafka is running**
-```bash
-   docker-compose ps kafka
-```
-
-4. **Check DLQ for failed messages**
-```bash
-   curl http://localhost:3001/api/dlq
-```
-
-5. **Test SMTP connection manually**
-```bash
-   # Access consumer container
-   docker-compose exec consumer sh
-   
-   # Try sending test email
-   node -e "
-   const nodemailer = require('nodemailer');
-   const transport = nodemailer.createTransport({
-     host: 'smtp.gmail.com',
-     port: 587,
-     auth: { user: 'your-email@gmail.com', pass: 'your-password' }
-   });
-   transport.verify().then(console.log).catch(console.error);
-   "
-```
-
-### Connection Errors
-```bash
-# Reset everything
-docker-compose down -v
-docker-compose up -d
-
-# Check network
-docker network ls
-docker network inspect email-notification-system_notification_network
-
-# Check service connectivity
-docker-compose exec producer ping -c 3 kafka
-docker-compose exec producer ping -c 3 postgres
-```
-
-### Port Already in Use
-```bash
-# Find process using port 3000
-lsof -i :3000
-# Or on Windows
-netstat -ano | findstr :3000
-
-# Kill the process or change port in docker-compose.yml
-```
-
-### Database Connection Issues
-```bash
-# Check PostgreSQL logs
-docker-compose logs postgres
-
-# Access PostgreSQL directly
-docker-compose exec postgres psql -U admin -d notificationdb
-
-# List tables
-\dt
-
-# Check templates
-SELECT * FROM templates;
-```
-
----
-
-## 📈 Performance Tips
-
-1. **Enable Redis Caching**
-   - Reduces database load for template fetches
-   - Automatically enabled in the system
-
-2. **Scale Consumers**
-```bash
-   docker-compose up -d --scale consumer=5
-```
-
-3. **Increase Kafka Partitions**
-   - Better message distribution
-   - Edit producer code and restart
-
-4. **Use Bulk API**
-   - Send multiple notifications in one request
-   - More efficient than individual requests
-
-5. **Monitor Logs**
-   - Watch for bottlenecks at http://localhost:8442
-   - Check error rates and response times
-
-6. **Database Optimization**
-   - Indexes are pre-configured in init.sql
-   - Regular cleanup of old logs
-
----
-
-## 🔒 Security Best Practices
-
-### For Production Deployment:
-
-1. **Change Default Passwords**
-```yaml
-   # In docker-compose.yml
-   postgres:
-     environment:
-       POSTGRES_PASSWORD: <strong-password>
-   
-   mongo:
-     environment:
-       MONGO_INITDB_ROOT_PASSWORD: <strong-password>
-```
-
-2. **Use Environment Variables**
-   - Never commit `.env` file to git
-   - Add `.env` to `.gitignore`
-
-3. **Enable TLS/SSL**
-```yaml
-   kafka:
-     environment:
-       KAFKA_SSL_ENABLED: 'true'
-```
-
-4. **Implement API Authentication**
-```javascript
-   // Add middleware in producer/index.js
-   app.use('/api', authMiddleware);
-```
-
-5. **Secure SMTP Connection**
-```yaml
-   consumer:
-     environment:
-       SMTP_SECURE: 'true'
-       SMTP_PORT: 465
-```
-
-6. **Network Isolation**
-   - Use Docker networks
-   - Expose only necessary ports
-
----
 
 ## 💡 Advanced Usage
 
@@ -995,64 +605,3 @@ curl -X POST http://localhost:3001/api/notifications \
     }
   }'
 ```
-
----
-
-## 📚 API Response Codes
-
-| Code | Meaning | Description |
-|------|---------|-------------|
-| 200 | OK | Request successful |
-| 201 | Created | Resource created successfully |
-| 404 | Not Found | Resource doesn't exist |
-| 429 | Too Many Requests | Rate limit exceeded |
-| 500 | Internal Server Error | Server error occurred |
-| 503 | Service Unavailable | Kafka not ready |
-
----
-
-## 🎓 Learning Resources
-
-### Understanding the System
-
-1. **Kafka Basics**
-   - Producer sends messages to topics
-   - Consumer reads messages from topics
-   - Topics are divided into partitions
-
-2. **Dead Letter Queue (DLQ)**
-   - Failed messages go to DLQ
-   - Can be retried manually
-   - Prevents message loss
-
-3. **Template Variables**
-   - Use `{{variable_name}}` syntax
-   - Replaced at runtime with actual data
-   - Works in both subject and body
-
-### Common Patterns
-
-#### Transactional Emails
-```bash
-# Order confirmation
-curl -X POST http://localhost:3001/api/notifications \
-  -H "Content-Type: application/json" \
-  -d '{
-    "user_name": "Customer",
-    "user_email": "customer@example.com",
-    "template_id": 2,
-    "data": {
-      "order_id": "ORD-123",
-      "total": "$199.99"
-    }
-  }'
-```
-
-#### Marketing Emails
-```bash
-# Newsletter
-curl -X POST http://localhost:3001/api/notifications \
-  -H "Content-Type: application/json" \
-  -d '[
-    {"user_name": "User1", "user_email": "user1@example.com", "template_id": 4, "data": {}},
-    {"user_name
