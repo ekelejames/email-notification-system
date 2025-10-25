@@ -42,7 +42,7 @@ services:
       - ME_CONFIG_BASICAUTH_USERNAME=admin
       - ME_CONFIG_BASICAUTH_PASSWORD=admin_pass
     depends_on:
-      - mongo
+      - kafka
     networks:
       - notification_network
 

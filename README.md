@@ -194,6 +194,8 @@ You should see 2 pre-loaded templates:
 - welcome_email
 - order_confirmation
 
+![alt text](image.png)
+
 ### Step 4: Send test nofication via the UI or do using API
 
 ### Through API: Send a Test Email (Replace with YOUR email)
@@ -218,6 +220,8 @@ You should see logs like:
 - ✓ Processing notification for request ID: 1
 - ✓ Template loaded: welcome_email
 - ✓ Email sent successfully
+
+![alt text](image-1.png)
 
 ### Step 7: Check Request Status
 ```bash
