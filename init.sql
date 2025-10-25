@@ -1,35 +1,113 @@
--- Create templates table
+-- Email Templates Table
 CREATE TABLE IF NOT EXISTS templates (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    description TEXT,
-    subject VARCHAR(500) NOT NULL,
-    html_content TEXT NOT NULL,
-    variables JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  subject VARCHAR(500) NOT NULL,
+  html_content TEXT NOT NULL,
+  variables JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create requests table
+-- Notification Requests Table
 CREATE TABLE IF NOT EXISTS requests (
-    id SERIAL PRIMARY KEY,
-    user_name VARCHAR(255) NOT NULL,
-    user_email VARCHAR(255) NOT NULL,
-    template_id INTEGER REFERENCES templates(id),
-    status VARCHAR(50) DEFAULT 'pending',
-    data JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    processed_at TIMESTAMP
+  id SERIAL PRIMARY KEY,
+  user_name VARCHAR(255) NOT NULL,
+  user_email VARCHAR(255) NOT NULL,
+  template_id INTEGER REFERENCES templates(id) ON DELETE CASCADE,
+  data JSONB DEFAULT '{}',
+  status VARCHAR(50) DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  processed_at TIMESTAMPTZ
 );
 
--- Create notifications log table
+-- Notification Logs Table
 CREATE TABLE IF NOT EXISTS notification_logs (
-    id SERIAL PRIMARY KEY,
-    request_id INTEGER REFERENCES requests(id),
-    status VARCHAR(50) NOT NULL,
-    error_message TEXT,
-    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  id SERIAL PRIMARY KEY,
+  request_id INTEGER REFERENCES requests(id) ON DELETE CASCADE,
+  status VARCHAR(50) NOT NULL,
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Dead Letter Queue Table
+CREATE TABLE IF NOT EXISTS dead_letter_queue (
+  id SERIAL PRIMARY KEY,
+  request_id INTEGER NOT NULL,
+  user_name VARCHAR(255),
+  user_email VARCHAR(255),
+  template_id INTEGER,
+  data JSONB,
+  error_message TEXT,
+  retry_count INTEGER DEFAULT 0,
+  retry_attempted BOOLEAN DEFAULT false,
+  failed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- System Logs Table (NEW)
+CREATE TABLE IF NOT EXISTS system_logs (
+  id SERIAL PRIMARY KEY,
+  timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  service VARCHAR(50) NOT NULL,
+  level VARCHAR(20) NOT NULL,
+  message TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  request_id INTEGER REFERENCES requests(id) ON DELETE SET NULL,
+  template_id INTEGER REFERENCES templates(id) ON DELETE SET NULL,
+  error_stack TEXT,
+  user_email VARCHAR(255),
+  duration_ms INTEGER,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_templates_name ON templates(name);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
+CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_user_email ON requests(user_email);
+CREATE INDEX IF NOT EXISTS idx_notification_logs_request_id ON notification_logs(request_id);
+CREATE INDEX IF NOT EXISTS idx_dlq_failed_at ON dead_letter_queue(failed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dlq_retry_attempted ON dead_letter_queue(retry_attempted);
+
+-- Indexes for system logs (NEW)
+CREATE INDEX IF NOT EXISTS idx_system_logs_timestamp ON system_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_system_logs_service ON system_logs(service);
+CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level);
+CREATE INDEX IF NOT EXISTS idx_system_logs_request_id ON system_logs(request_id);
+CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_logs_service_level ON system_logs(service, level);
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for templates table
+DROP TRIGGER IF EXISTS update_templates_updated_at ON templates;
+CREATE TRIGGER update_templates_updated_at
+  BEFORE UPDATE ON templates
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to clean old logs (keep last 7 days)
+CREATE OR REPLACE FUNCTION clean_old_logs()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM system_logs 
+  WHERE timestamp < NOW() - INTERVAL '7 days';
+  
+  RAISE NOTICE 'Cleaned old logs older than 7 days';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Grant privileges to admin user (user is already created by PostgreSQL)
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO admin;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO admin;
 
 -- Insert sample templates
 INSERT INTO templates (name, description, subject, html_content, variables) VALUES
@@ -102,16 +180,3 @@ INSERT INTO templates (name, description, subject, html_content, variables) VALU
 INSERT INTO requests (user_name, user_email, template_id, data) VALUES
 ('John Doe', 'john.doe@example.com', 1, '{"registration_date": "2025-10-06", "dashboard_url": "https://example.com/dashboard"}'::jsonb),
 ('Jane Smith', 'jane.smith@example.com', 2, '{"order_id": "ORD-12345", "total_amount": "$199.99", "delivery_address": "123 Main St, City", "delivery_date": "2025-10-10"}'::jsonb);
-
--- Create function to update timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Create trigger for templates
-CREATE TRIGGER update_templates_updated_at BEFORE UPDATE ON templates
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

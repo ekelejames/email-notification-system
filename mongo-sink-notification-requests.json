@@ -1,0 +1,19 @@
+{
+  "name": "connector-notification-requests",
+  "config": {
+    "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
+    "tasks.max": "1",
+    "topics": "notification-requests",
+    "connection.uri": "mongodb://root:root@mongo:27017",
+    "database": "kafka_messages",
+    "collection": "notification-requests",
+    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8085",
+    "value.converter.schemas.enable": "false",
+    "key.converter.schemas.enable": "false",
+    "errors.tolerance": "all",
+    "errors.log.enable": "true"
+
+  }
+}

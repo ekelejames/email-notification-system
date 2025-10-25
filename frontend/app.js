@@ -2,6 +2,7 @@ const API_URL = 'http://localhost:3001/api';
 
 let editor;
 let currentTemplateId = null;
+let isCodeMode = false;
 
 // Initialize CKEditor
 ClassicEditor
@@ -16,6 +17,50 @@ ClassicEditor
     .catch(error => {
         console.error(error);
     });
+
+// Toggle between visual and code mode
+document.getElementById('toggleModeBtn').addEventListener('click', () => {
+    isCodeMode = !isCodeMode;
+    const visualEditor = document.getElementById('visualEditor');
+    const codeEditor = document.getElementById('codeEditor');
+    const htmlCodeArea = document.getElementById('htmlCode');
+    const toggleBtn = document.getElementById('toggleModeBtn');
+    
+    if (isCodeMode) {
+        // Switch to code mode
+        htmlCodeArea.value = editor.getData();
+        visualEditor.classList.add('hidden');
+        codeEditor.classList.remove('hidden');
+        toggleBtn.textContent = '👁️ Visual Mode';
+        toggleBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+        toggleBtn.classList.add('bg-purple-500', 'hover:bg-purple-600');
+    } else {
+        // Switch to visual mode
+        editor.setData(htmlCodeArea.value);
+        codeEditor.classList.add('hidden');
+        visualEditor.classList.remove('hidden');
+        toggleBtn.textContent = '</> Code Mode';
+        toggleBtn.classList.remove('bg-purple-500', 'hover:bg-purple-600');
+        toggleBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+    }
+});
+
+// Get HTML content from current mode
+function getHtmlContent() {
+    if (isCodeMode) {
+        return document.getElementById('htmlCode').value;
+    } else {
+        return editor.getData();
+    }
+}
+
+// Set HTML content to current mode
+function setHtmlContent(html) {
+    document.getElementById('htmlCode').value = html;
+    if (!isCodeMode) {
+        editor.setData(html);
+    }
+}
 
 // Load templates
 async function loadTemplates() {
@@ -66,7 +111,7 @@ async function loadTemplate(id) {
             ? template.variables.join(', ') 
             : '';
         
-        editor.setData(template.html_content);
+        setHtmlContent(template.html_content);
         
         document.getElementById('editorContainer').classList.remove('hidden');
         document.getElementById('emptyState').classList.add('hidden');
@@ -83,7 +128,7 @@ document.getElementById('newTemplateBtn').addEventListener('click', () => {
     currentTemplateId = null;
     document.getElementById('templateId').value = '';
     document.getElementById('templateForm').reset();
-    editor.setData('');
+    setHtmlContent('');
     
     document.getElementById('editorContainer').classList.remove('hidden');
     document.getElementById('emptyState').classList.add('hidden');
@@ -100,7 +145,7 @@ document.getElementById('templateForm').addEventListener('submit', async (e) => 
     const subject = document.getElementById('templateSubject').value;
     const variablesStr = document.getElementById('templateVariables').value;
     const variables = variablesStr ? variablesStr.split(',').map(v => v.trim()).filter(v => v) : [];
-    const html_content = editor.getData();
+    const html_content = getHtmlContent();
     
     const templateData = {
         name,
@@ -156,7 +201,7 @@ document.getElementById('deleteTemplateBtn').addEventListener('click', async () 
             alert('Template deleted successfully!');
             currentTemplateId = null;
             document.getElementById('templateForm').reset();
-            editor.setData('');
+            setHtmlContent('');
             document.getElementById('editorContainer').classList.add('hidden');
             document.getElementById('emptyState').classList.remove('hidden');
             await loadTemplates();
@@ -189,6 +234,22 @@ document.getElementById('testEmailBtn').addEventListener('click', () => {
     
     document.getElementById('testData').value = JSON.stringify(sampleData, null, 2);
     document.getElementById('testModal').classList.remove('hidden');
+});
+
+// Preview HTML
+document.getElementById('previewBtn').addEventListener('click', () => {
+    const html = getHtmlContent();
+    const previewFrame = document.getElementById('previewFrame');
+    const previewDoc = previewFrame.contentDocument || previewFrame.contentWindow.document;
+    previewDoc.open();
+    previewDoc.write(html);
+    previewDoc.close();
+    document.getElementById('previewModal').classList.remove('hidden');
+});
+
+// Close preview modal
+document.getElementById('closePreview').addEventListener('click', () => {
+    document.getElementById('previewModal').classList.add('hidden');
 });
 
 // Close modal

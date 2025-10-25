@@ -66,18 +66,39 @@
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">HTML Content *</label>
-                            <div id="editor"></div>
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="block text-sm font-medium text-gray-700">HTML Content *</label>
+                                <button type="button" id="toggleModeBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm">
+                                    &lt;/&gt; Code Mode
+                                </button>
+                            </div>
+                            
+                            <!-- Visual Editor -->
+                            <div id="visualEditor">
+                                <div id="editor"></div>
+                            </div>
+                            
+                            <!-- Code Editor -->
+                            <div id="codeEditor" class="hidden">
+                                <textarea id="htmlCode" 
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          rows="20"
+                                          placeholder="Paste your HTML code here..."></textarea>
+                                <p class="text-xs text-gray-500 mt-2">💡 Tip: Use {{variable_name}} for dynamic content. Example: {{user_name}}, {{order_id}}</p>
+                            </div>
                         </div>
 
-                        <div class="flex gap-3 pt-4">
+                        <div class="flex gap-3 pt-4 flex-wrap">
                             <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded font-medium">
                                 💾 Save Template
+                            </button>
+                            <button type="button" id="previewBtn" class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded font-medium">
+                                👁️ Preview
                             </button>
                             <button type="button" id="testEmailBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded font-medium">
                                 ✉️ Send Test
                             </button>
-                            <button type="button" id="deleteTemplateBtn" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded font-medium ml-auto">
+                            <button type="button" id="deleteTemplateBtn" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded font-medium ml-auto hidden">
                                 🗑️ Delete
                             </button>
                         </div>
@@ -87,6 +108,19 @@
                 <div id="emptyState" class="text-center py-16">
                     <div class="text-gray-400 text-6xl mb-4">📝</div>
                     <p class="text-gray-500 text-lg">Select a template or create a new one to get started</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Modal -->
+        <div id="previewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-screen overflow-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold">Email Preview</h3>
+                    <button type="button" id="closePreview" class="text-gray-500 hover:text-gray-700 text-2xl font-bold">×</button>
+                </div>
+                <div class="border border-gray-300 rounded">
+                    <iframe id="previewFrame" class="w-full" style="height: 600px; border: none;"></iframe>
                 </div>
             </div>
         </div>
@@ -126,4 +160,4 @@
 
     <script src="app.js"></script>
 </body>
-</html> user_email, order_id"
+</html>

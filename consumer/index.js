@@ -1,6 +1,9 @@
 const { Kafka } = require('kafkajs');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
+const Logger = require('./logger');
+
+const logger = new Logger('consumer');
 
 // connecting to PostgreSQL 
 const pool = new Pool({
@@ -47,7 +50,11 @@ function replaceVariables(template, data) {
 async function processNotification(message) {
   const { request_id, user_name, user_email, template_id, data } = message;
   
-  console.log(`\n📧 Processing notification for request ID: ${request_id}`);
+  await logger.info(`Processing notification for request ID: ${request_id}`, { 
+    request_id, 
+    user_email, 
+    template_id 
+  });
 
   try {
     // Get template from database
@@ -57,6 +64,7 @@ async function processNotification(message) {
     );
 
     if (templateResult.rows.length === 0) {
+      await logger.error(`Template not found`, { template_id, request_id });
       throw new Error(`Template with ID ${template_id} not found`);
     }
 
@@ -73,8 +81,10 @@ async function processNotification(message) {
     const htmlContent = replaceVariables(template.html_content, emailData);
     const subject = replaceVariables(template.subject, emailData);
 
-    console.log(`  ✓ Template loaded: ${template.name}`);
-    console.log(`  ✓ Sending to: ${user_email}`);
+    await logger.info(`Template loaded: ${template.name}`, { 
+      template_name: template.name,
+      recipient: user_email 
+    });
 
     // Send email
     const info = await transporter.sendMail({
@@ -84,7 +94,12 @@ async function processNotification(message) {
       html: htmlContent,
     });
 
-    console.log(`  ✓ Email sent successfully: ${info.messageId}`);
+    await logger.success(`Email sent successfully`, { 
+      request_id,
+      message_id: info.messageId,
+      recipient: user_email,
+      subject 
+    });
 
     // Update request status
     await pool.query(
@@ -98,10 +113,14 @@ async function processNotification(message) {
       [request_id, 'success']
     );
 
-    console.log(`  ✓ Request ${request_id} marked as sent\n`);
+    await logger.success(`Request marked as sent`, { request_id });
 
   } catch (error) {
-    console.error(`  ✗ Error processing notification:`, error.message);
+    await logger.error(`Error processing notification`, { 
+      request_id,
+      error: error.message,
+      stack: error.stack 
+    });
 
     // Update request status to failed
     await pool.query(
@@ -123,15 +142,15 @@ async function processNotification(message) {
 async function run() {
   try {
     await consumer.connect();
-    console.log('✓ Kafka Consumer connected');
+    await logger.success('Kafka Consumer connected');
 
     await consumer.subscribe({ 
       topic: 'notification-requests', 
       fromBeginning: false 
     });
 
-    console.log('✓ Subscribed to notification-requests topic');
-    console.log('✓ Consumer is ready to process messages...\n');
+    await logger.success('Subscribed to notification-requests topic');
+    await logger.info('Consumer is ready to process messages');
 
     await consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
@@ -139,20 +158,27 @@ async function run() {
           const value = JSON.parse(message.value.toString());
           await processNotification(value);
         } catch (error) {
-          console.error('Error in message handler:', error);
+          await logger.error('Error in message handler', { 
+            error: error.message,
+            topic,
+            partition 
+          });
         }
       },
     });
 
   } catch (error) {
-    console.error('Fatal error in consumer:', error);
+    await logger.error('Fatal error in consumer', { 
+      error: error.message,
+      stack: error.stack 
+    });
     process.exit(1);
   }
 }
 
 // Graceful shutdown
 const shutdown = async () => {
-  console.log('\nShutting down consumer...');
+  await logger.info('Shutting down consumer...');
   await consumer.disconnect();
   await pool.end();
   process.exit(0);
@@ -162,4 +188,5 @@ process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 // Start the consumer
+logger.info('Starting consumer service...');
 run().catch(console.error);

@@ -1,0 +1,18 @@
+FROM confluentinc/cp-kafka-connect:7.6.0
+
+# Switch to root to install necessary tools
+USER root
+
+# Install certificates and curl
+RUN yum update -y && \
+    yum install -y ca-certificates curl && \
+    yum clean all && \
+    rm -rf /var/cache/yum
+
+# Install connectors directly using confluent-hub
+#RUN confluent-hub install --no-prompt --no-checksum mongodb/kafka-connect-mongodb:1.10.0 --component-dir /usr/share/confluent-hub-components
+
+ENV CONNECT_PLUGIN_PATH="/usr/share/java,/usr/share/confluent-hub-components"
+
+# Switch back to the appuser
+USER appuser

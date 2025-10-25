@@ -1,13 +1,11 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: notification_db
     environment:
-      POSTGRES_USER: notifuser
-      POSTGRES_PASSWORD: notifpass
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
       POSTGRES_DB: notificationdb
     ports:
       - "5432:5432"
@@ -16,8 +14,52 @@ services:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - notification_network
+
+  mongo:
+    image: mongo
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=root
+    volumes:
+      - ./mongo-data:/data/db
+    networks:
+      - notification_network
+
+
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongo-express
+    ports:
+      - "8084:8081" # Mapping host port 8084 to container port 8081
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=root
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=root
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin_pass
+    depends_on:
+      - mongo
+    networks:
+      - notification_network
+
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: redis_cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis_data:/data
+    networks:
+      - notification_network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U notifuser"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,7 +103,64 @@ services:
       timeout: 10s
       retries: 5
 
-  # Producer Service
+
+  kafka-connect:
+    build:
+      context: .
+      dockerfile: Dockerfile.kafka-connect
+    container_name: kafka-connect
+    depends_on:
+      - kafka
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: 'PLAINTEXT://kafka:29092'
+      CONNECT_REST_ADVERTISED_HOST_NAME: 'kafka-connect'
+      CONNECT_GROUP_ID: 'kafka-connect-group'
+      CONNECT_CONFIG_STORAGE_TOPIC: 'connect-configs'
+      CONNECT_OFFSET_STORAGE_TOPIC: 'connect-offsets'
+      CONNECT_STATUS_STORAGE_TOPIC: 'connect-status'
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: 'org.apache.kafka.connect.storage.StringConverter'
+      CONNECT_VALUE_CONVERTER: 'io.confluent.connect.json.JsonSchemaConverter'
+      CONNECT_REST_PORT: 8083
+      CONNECT_PLUGIN_PATH: '/usr/share/java,/usr/share/confluent-hub-components,/kafka-plugins'
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      CONNECT_SECURITY_PROTOCOL: PLAINTEXT
+      CONNECT_PRODUCER_SECURITY_PROTOCOL: PLAINTEXT
+      CONNECT_CONSUMER_SECURITY_PROTOCOL: PLAINTEXT
+    volumes:
+      - ./plugins/kafka-plugins:/kafka-plugins
+      - ./mongodb-kafka-connect-mongodb-1.14.1:/usr/share/confluent-hub-components
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - notification_network
+
+  # Log UI Service (with MongoDB)
+  logui:
+    build:
+      context: ./logUI
+      dockerfile: Dockerfile
+    container_name: log_ui
+    environment:
+      MONGO_URL: mongodb://root:root@mongo:27017
+      MONGO_AUTH_SOURCE: admin
+    ports:
+      - "8442:8442"
+    networks:
+      - notification_network
+    restart: unless-stopped
+    depends_on:
+      - mongo
+
+
+  # Producer Service (with Redis caching)
   producer:
     build:
       context: ./producer
@@ -70,12 +169,16 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      postgres:
+      redis:
         condition: service_healthy
+      logui:
+        condition: service_started
     environment:
-      DATABASE_URL: postgresql://notifuser:notifpass@postgres:5432/notificationdb
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/notificationdb
       KAFKA_BROKER: kafka:29092
-      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      LOG_SERVER: http://logui:8442
+      NODE_ENV: production
     ports:
       - "3001:3001"
     networks:
@@ -87,32 +190,34 @@ services:
     build:
       context: ./consumer
       dockerfile: Dockerfile
-    container_name: consumer_service
     depends_on:
       kafka:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
+      logui:
+        condition: service_started
     environment:
-      DATABASE_URL: postgresql://notifuser:notifpass@postgres:5432/notificationdb
+      DATABASE_URL: postgresql://admin:admin@postgres:5432/notificationdb
       KAFKA_BROKER: kafka:29092
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-your-email@gmail.com}
       SMTP_PASS: ${SMTP_PASS:-your-password}
-      NODE_ENV: development
+      LOG_SERVER: http://logui:8442
+      NODE_ENV: production
     networks:
       - notification_network
     restart: unless-stopped
+    deploy:
+      replicas: 2
 
   # Frontend Template Editor
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: template_editor
+    container_name: template_editor_ui
     depends_on:
-      - postgres
+      - producer
     environment:
       API_URL: http://producer:3001
     ports:
@@ -122,6 +227,8 @@ services:
 
 volumes:
   postgres_data:
+  mongo_data:
+  redis_data:
   kafka_data:
   zookeeper_data:
   zookeeper_logs:
