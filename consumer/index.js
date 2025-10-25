@@ -1,7 +1,11 @@
+const Logger = require('./logger');
+
+// Add this at the very top of consumer/index.js
+require('dotenv').config();
+
 const { Kafka } = require('kafkajs');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
-const Logger = require('./logger');
 
 const logger = new Logger('consumer');
 
@@ -36,6 +40,23 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// Verify SMTP connection on startup
+async function verifySmtp() {
+  try {
+    await transporter.verify();
+    await logger.success('SMTP connection verified successfully');
+    return true;
+  } catch (error) {
+    await logger.error('SMTP connection verification failed', { 
+      error: error.message,
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT,
+      user: process.env.SMTP_USER
+    });
+    return false;
+  }
+}
+
 // Template variable replacement function
 function replaceVariables(template, data) {
   let result = template;
@@ -46,14 +67,47 @@ function replaceVariables(template, data) {
   return result;
 }
 
+// Move failed message to Dead Letter Queue
+async function moveToDLQ(message, error) {
+  const { request_id, user_name, user_email, template_id, data } = message;
+  
+  try {
+    await pool.query(
+      `INSERT INTO dead_letter_queue 
+       (request_id, user_name, user_email, template_id, data, error_message, retry_count) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        request_id,
+        user_name,
+        user_email,
+        template_id,
+        JSON.stringify(data),
+        error.message,
+        message.retry_count || 0
+      ]
+    );
+    
+    await logger.warning('Message moved to DLQ', { 
+      request_id,
+      error: error.message 
+    });
+  } catch (dlqError) {
+    await logger.error('Failed to move message to DLQ', { 
+      request_id,
+      error: dlqError.message 
+    });
+  }
+}
+
 // Process notification
 async function processNotification(message) {
-  const { request_id, user_name, user_email, template_id, data } = message;
+  const { request_id, user_name, user_email, template_id, data, retry_count = 0, max_retries = 3 } = message;
   
   await logger.info(`Processing notification for request ID: ${request_id}`, { 
     request_id, 
     user_email, 
-    template_id 
+    template_id,
+    retry_count 
   });
 
   try {
@@ -119,7 +173,8 @@ async function processNotification(message) {
     await logger.error(`Error processing notification`, { 
       request_id,
       error: error.message,
-      stack: error.stack 
+      stack: error.stack,
+      retry_count 
     });
 
     // Update request status to failed
@@ -134,6 +189,21 @@ async function processNotification(message) {
       [request_id, 'failed', error.message]
     );
 
+    // Move to DLQ if max retries reached
+    if (retry_count >= max_retries) {
+      await logger.warning(`Max retries reached, moving to DLQ`, { 
+        request_id,
+        retry_count 
+      });
+      await moveToDLQ(message, error);
+    } else {
+      await logger.info(`Will retry message`, { 
+        request_id,
+        retry_count: retry_count + 1,
+        max_retries 
+      });
+    }
+
     throw error;
   }
 }
@@ -141,6 +211,12 @@ async function processNotification(message) {
 // Start consumer
 async function run() {
   try {
+    // Verify SMTP connection before starting
+    const smtpReady = await verifySmtp();
+    if (!smtpReady) {
+      await logger.warning('SMTP not ready, but continuing to start consumer...');
+    }
+
     await consumer.connect();
     await logger.success('Kafka Consumer connected');
 
@@ -163,6 +239,8 @@ async function run() {
             topic,
             partition 
           });
+          // Don't throw here - let Kafka commit the offset
+          // The message is already in DLQ if max retries reached
         }
       },
     });

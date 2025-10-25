@@ -136,7 +136,7 @@ cd email-notification-system
 ### 3. Start the System
 ```bash
 # Start all services
-docker-compose up -d
+docker-compose up -d --build
 
 # View logs
 docker-compose logs -f
@@ -176,7 +176,7 @@ Once your system is running, open these URLs directly in your browser:
 
 ### Step 1: Start the System
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
 
 ### Step 2: Wait for Services (30-60 seconds)
@@ -197,6 +197,29 @@ You should see 2 pre-loaded templates:
 ![alt text](image.png)
 
 ### Step 4: Send test nofication via the UI or do using API
+Add your custome html code to style the outcome of your email
+
+![alt text](image-2.png)
+
+![alt text](image-3.png)
+
+preview your html
+
+![alt text](image-4.png)
+
+save your template before sending
+
+![alt text](image-7.png)
+
+send a test email
+
+![alt text](image-6.png)
+
+![alt text](image-5.png)
+
+view email sent to the recipient email address
+
+![alt text](image-8.png)
 
 ### Through API: Send a Test Email (Replace with YOUR email)
 ```bash
