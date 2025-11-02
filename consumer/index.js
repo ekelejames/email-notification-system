@@ -14,46 +14,80 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// setting up kafka
+// setting up kafka - UPDATED CONFIGURATION
 const kafka = new Kafka({
   clientId: 'consumer-service',
-  brokers: [process.env.KAFKA_BROKER],
+  brokers: [process.env.KAFKA_BROKER || 'kafka:29092'],
   retry: {
     initialRetryTime: 300,
     retries: 10
-  }
+  },
+  connectionTimeout: 10000,
+  requestTimeout: 30000
 });
 
 const consumer = kafka.consumer({ groupId: 'notification-group' });
 
-// Email transporter
+// Email transporter - UPDATED FOR PORT 465
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT),
-  secure: false,
+  port: parseInt(process.env.SMTP_PORT) || 465,
+  secure: true, // true for port 465
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
   tls: {
     rejectUnauthorized: false
-  }
+  },
+  socketTimeout: 30000,
+  connectionTimeout: 30000,
+  greetingTimeout: 30000
 });
 
-// Verify SMTP connection on startup
+// Verify SMTP connection on startup - ENHANCED VERSION
 async function verifySmtp() {
   try {
+    console.log('Testing SMTP connection with port:', process.env.SMTP_PORT);
+    
+    // Test with current configuration
     await transporter.verify();
     await logger.success('SMTP connection verified successfully');
     return true;
   } catch (error) {
     await logger.error('SMTP connection verification failed', { 
       error: error.message,
+      code: error.code,
       host: process.env.SMTP_HOST,
       port: process.env.SMTP_PORT,
       user: process.env.SMTP_USER
     });
-    return false;
+    
+    // Try alternative configuration if primary fails
+    await logger.info('Trying alternative SMTP configuration...');
+    try {
+      const altTransporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+      
+      await altTransporter.verify();
+      await logger.success('SMTP connection verified with alternative configuration (port 587)');
+      return true;
+    } catch (altError) {
+      await logger.error('Alternative SMTP configuration also failed', {
+        error: altError.message
+      });
+      return false;
+    }
   }
 }
 
